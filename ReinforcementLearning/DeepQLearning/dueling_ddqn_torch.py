@@ -5,7 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-class ReplayBuffer():
+
+class ReplayBuffer:
     def __init__(self, max_size, input_shape):
         self.mem_size = max_size
         self.mem_cntr = 0
@@ -15,7 +16,7 @@ class ReplayBuffer():
                                         dtype=np.float32)
         self.action_memory = np.zeros(self.mem_size, dtype=np.int64)
         self.reward_memory = np.zeros(self.mem_size, dtype=np.float32)
-        self.terminal_memory = np.zeros(self.mem_size, dtype=np.uint8)
+        self.terminal_memory = np.zeros(self.mem_size, dtype=np.bool)
 
     def store_transition(self, state, action, reward, state_, done):
         index = self.mem_cntr % self.mem_size
@@ -37,6 +38,7 @@ class ReplayBuffer():
         terminal = self.terminal_memory[batch]
 
         return states, actions, rewards, states_, terminal
+
 
 class DuelingDeepQNetwork(nn.Module):
     def __init__(self, lr, n_actions, name, input_dims, chkpt_dir):
@@ -68,10 +70,11 @@ class DuelingDeepQNetwork(nn.Module):
         print('... loading checkpoint ...')
         self.load_state_dict(T.load(self.checkpoint_file))
 
-class Agent():
+
+class Agent:
     def __init__(self, gamma, epsilon, lr, n_actions, input_dims,
                  mem_size, batch_size, eps_min=0.01, eps_dec=5e-7,
-                 replace=1000, chkpt_dir='tmp/dueling_ddqn'):
+                 replace=1000, chkpt_dir='./tmp/dueling_ddqn'):
         self.gamma = gamma
         self.epsilon = epsilon
         self.lr = lr
@@ -85,7 +88,7 @@ class Agent():
         self.action_space = [i for i in range(self.n_actions)]
         self.learn_step_counter = 0
 
-        self.memory = ReplayBuffer(mem_size, input_dims, n_actions)
+        self.memory = ReplayBuffer(mem_size, input_dims)
 
         self.q_eval = DuelingDeepQNetwork(self.lr, self.n_actions,
                                    input_dims=self.input_dims,

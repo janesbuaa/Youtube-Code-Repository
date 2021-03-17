@@ -2,6 +2,9 @@ import gym
 import numpy as np
 from dueling_ddqn_torch import Agent
 from utils import plotLearning
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 
 if __name__ == '__main__':
     env = gym.make('LunarLander-v2')
@@ -29,17 +32,14 @@ if __name__ == '__main__':
             action = agent.choose_action(observation)
             observation_, reward, done, info = env.step(action)
             score += reward
-            agent.store_transition(observation, action,
-                                    reward, observation_, int(done))
+            agent.store_transition(observation, action, reward, observation_, int(done))
             agent.learn()
 
             observation = observation_
 
         scores.append(score)
         avg_score = np.mean(scores[max(0, i-100):(i+1)])
-        print('episode: ', i,'score %.1f ' % score,
-             ' average score %.1f' % avg_score,
-            'epsilon %.2f' % agent.epsilon)
+        print('episode: ', i, 'score %.1f ' % score, ' average score %.1f' % avg_score, 'epsilon %.2f' % agent.epsilon)
         if i > 0 and i % 10 == 0:
             agent.save_models()
 
