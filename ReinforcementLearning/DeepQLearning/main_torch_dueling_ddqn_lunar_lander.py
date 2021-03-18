@@ -8,12 +8,12 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 if __name__ == '__main__':
     env = gym.make('LunarLander-v2')
-    num_games = 250
+    num_games = 500
     load_checkpoint = False
 
     agent = Agent(gamma=0.99, epsilon=1.0, lr=5e-4,
                   input_dims=[8], n_actions=4, mem_size=100000, eps_min=0.01,
-                  batch_size=64, eps_dec=1e-3, replace=100)
+                  batch_size=640, eps_dec=1e-3, replace=100)
 
     if load_checkpoint:
         agent.load_models()

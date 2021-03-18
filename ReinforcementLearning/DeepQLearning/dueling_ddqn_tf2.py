@@ -3,6 +3,7 @@ import tensorflow.keras as keras
 from tensorflow.keras.optimizers import Adam
 import numpy as np
 
+
 class DuelingDeepQNetwork(keras.Model):
     def __init__(self, n_actions, fc1_dims, fc2_dims):
         super(DuelingDeepQNetwork, self).__init__()
@@ -29,7 +30,7 @@ class DuelingDeepQNetwork(keras.Model):
         return A
 
 
-class ReplayBuffer():
+class ReplayBuffer:
     def __init__(self, max_size, input_shape):
         self.mem_size = max_size
         self.mem_cntr = 0
@@ -64,7 +65,8 @@ class ReplayBuffer():
 
         return states, actions, rewards, new_states, dones
 
-class Agent():
+
+class Agent:
     def __init__(self, lr, gamma, n_actions, epsilon, batch_size,
                  input_dims, epsilon_dec=1e-3, eps_end=0.01, 
                  mem_size=100000, fc1_dims=128,
