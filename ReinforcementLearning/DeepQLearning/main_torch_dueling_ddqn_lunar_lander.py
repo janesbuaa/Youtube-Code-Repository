@@ -2,8 +2,6 @@ import gym
 import numpy as np
 from dueling_ddqn_torch import Agent
 from utils import plotLearning
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
 if __name__ == '__main__':
@@ -13,7 +11,7 @@ if __name__ == '__main__':
 
     agent = Agent(gamma=0.99, epsilon=1.0, lr=5e-4,
                   input_dims=[8], n_actions=4, mem_size=100000, eps_min=0.01,
-                  batch_size=640, eps_dec=1e-3, replace=100)
+                  batch_size=2640, eps_dec=1e-3, replace=100)
 
     if load_checkpoint:
         agent.load_models()
@@ -22,25 +20,30 @@ if __name__ == '__main__':
     scores = []
     eps_history = []
     n_steps = 0
+    import time
 
     for i in range(num_games):
         done = False
         observation = env.reset()
         score = 0
 
+        # print('222', time.time())
+        j = 0
         while not done:
             action = agent.choose_action(observation)
             observation_, reward, done, info = env.step(action)
             score += reward
-            agent.store_transition(observation, action, reward, observation_, int(done))
+            agent.store_transition(observation, action, reward, observation_, done)
             agent.learn()
 
             observation = observation_
+            j += 1
 
+        print(j)
         scores.append(score)
         avg_score = np.mean(scores[max(0, i-100):(i+1)])
         print('episode: ', i, 'score %.1f ' % score, ' average score %.1f' % avg_score, 'epsilon %.2f' % agent.epsilon)
-        if i > 0 and i % 10 == 0:
+        if i > 0 and i % 30 == 0:
             agent.save_models()
 
         eps_history.append(agent.epsilon)

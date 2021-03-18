@@ -4,16 +4,27 @@ import torch as T
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import time
+from functools import wraps
+
+
+def timethis(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time.perf_counter()
+        r = func(*args, **kwargs)
+        end = time.perf_counter()
+        print('{}.{} : {}'.format(func.__module__, func.__name__, end - start))
+        return r
+    return wrapper
 
 
 class ReplayBuffer:
     def __init__(self, max_size, input_shape):
         self.mem_size = max_size
         self.mem_cntr = 0
-        self.state_memory = np.zeros((self.mem_size, *input_shape),
-                                    dtype=np.float32)
-        self.new_state_memory = np.zeros((self.mem_size, *input_shape),
-                                        dtype=np.float32)
+        self.state_memory = np.zeros((self.mem_size, *input_shape), dtype=np.float32)
+        self.new_state_memory = np.zeros((self.mem_size, *input_shape), dtype=np.float32)
         self.action_memory = np.zeros(self.mem_size, dtype=np.int64)
         self.reward_memory = np.zeros(self.mem_size, dtype=np.float32)
         self.terminal_memory = np.zeros(self.mem_size, dtype=np.bool)
@@ -91,18 +102,18 @@ class Agent:
         self.memory = ReplayBuffer(mem_size, input_dims)
 
         self.q_eval = DuelingDeepQNetwork(self.lr, self.n_actions,
-                                   input_dims=self.input_dims,
-                                   name='lunar_lander_dueling_ddqn_q_eval',
-                                   chkpt_dir=self.chkpt_dir)
+                                          input_dims=self.input_dims,
+                                          name='lunar_lander_dueling_ddqn_q_eval',
+                                          chkpt_dir=self.chkpt_dir)
 
         self.q_next = DuelingDeepQNetwork(self.lr, self.n_actions,
-                                   input_dims=self.input_dims,
-                                   name='lunar_lander_dueling_ddqn_q_next',
-                                   chkpt_dir=self.chkpt_dir)
+                                          input_dims=self.input_dims,
+                                          name='lunar_lander_dueling_ddqn_q_next',
+                                          chkpt_dir=self.chkpt_dir)
 
     def choose_action(self, observation):
         if np.random.random() > self.epsilon:
-            state = T.tensor([observation],dtype=T.float).to(self.q_eval.device)
+            state = T.tensor([observation], dtype=T.float).to(self.q_eval.device)
             _, advantage = self.q_eval.forward(state)
             action = T.argmax(advantage).item()
         else:
@@ -118,8 +129,7 @@ class Agent:
             self.q_next.load_state_dict(self.q_eval.state_dict())
 
     def decrement_epsilon(self):
-        self.epsilon = self.epsilon - self.eps_dec \
-                        if self.epsilon > self.eps_min else self.eps_min
+        self.epsilon = self.epsilon - self.eps_dec if self.epsilon > self.eps_min else self.eps_min
 
     def save_models(self):
         self.q_eval.save_checkpoint()
@@ -129,45 +139,41 @@ class Agent:
         self.q_eval.load_checkpoint()
         self.q_next.load_checkpoint()
 
+    # @timethis
     def learn(self):
-        if self.memory.mem_cntr < self.batch_size:
-            return
+        if self.memory.mem_cntr >= self.batch_size:
+            self.q_eval.optimizer.zero_grad()
 
-        self.q_eval.optimizer.zero_grad()
+            self.replace_target_network()
 
-        self.replace_target_network()
+            state, action, reward, new_state, done = self.memory.sample_buffer(self.batch_size)
 
-        state, action, reward, new_state, done = \
-                                self.memory.sample_buffer(self.batch_size)
+            states = T.tensor(state).to(self.q_eval.device)
+            rewards = T.tensor(reward).to(self.q_eval.device)
+            dones = T.tensor(done).to(self.q_eval.device)
+            actions = T.tensor(action).to(self.q_eval.device)
+            states_ = T.tensor(new_state).to(self.q_eval.device)
 
-        states = T.tensor(state).to(self.q_eval.device)
-        rewards = T.tensor(reward).to(self.q_eval.device)
-        dones = T.tensor(done).to(self.q_eval.device)
-        actions = T.tensor(action).to(self.q_eval.device)
-        states_ = T.tensor(new_state).to(self.q_eval.device)
+            indices = np.arange(self.batch_size)
 
-        indices = np.arange(self.batch_size)
+            V_s, A_s = self.q_eval.forward(states)
+            V_s_, A_s_ = self.q_next.forward(states_)
 
-        V_s, A_s = self.q_eval.forward(states)
-        V_s_, A_s_ = self.q_next.forward(states_)
+            V_s_eval, A_s_eval = self.q_eval.forward(states_)
 
-        V_s_eval, A_s_eval = self.q_eval.forward(states_)
+            q_pred = T.add(V_s, (A_s - A_s.mean(dim=1, keepdim=True)))[indices, actions]
+            q_next = T.add(V_s_, (A_s_ - A_s_.mean(dim=1, keepdim=True)))
 
-        q_pred = T.add(V_s,
-                        (A_s - A_s.mean(dim=1, keepdim=True)))[indices, actions]
-        q_next = T.add(V_s_,
-                        (A_s_ - A_s_.mean(dim=1, keepdim=True)))
+            q_eval = T.add(V_s_eval, (A_s_eval - A_s_eval.mean(dim=1, keepdim=True)))
 
-        q_eval = T.add(V_s_eval, (A_s_eval - A_s_eval.mean(dim=1,keepdim=True)))
+            max_actions = T.argmax(q_eval, dim=1)
 
-        max_actions = T.argmax(q_eval, dim=1)
+            q_next[dones] = 0.0
+            q_target = rewards + self.gamma * q_next[indices, max_actions]
 
-        q_next[dones] = 0.0
-        q_target = rewards + self.gamma*q_next[indices, max_actions]
+            loss = self.q_eval.loss(q_target, q_pred).to(self.q_eval.device)
+            loss.backward()
+            self.q_eval.optimizer.step()
+            self.learn_step_counter += 1
 
-        loss = self.q_eval.loss(q_target, q_pred).to(self.q_eval.device)
-        loss.backward()
-        self.q_eval.optimizer.step()
-        self.learn_step_counter += 1
-
-        self.decrement_epsilon()
+            self.decrement_epsilon()

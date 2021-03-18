@@ -5,8 +5,7 @@ from utils import plotLearning
 
 if __name__ == '__main__':
     env = gym.make('LunarLander-v2')
-    agent = Agent(lr=0.0005, gamma=0.99, n_actions=4, epsilon=1.0,
-                  batch_size=64, input_dims=[8])
+    agent = Agent(lr=0.0005, gamma=0.99, n_actions=4, epsilon=1.0, batch_size=64, input_dims=[8])
     n_games = 500
     ddqn_scores = []
     eps_history = []
@@ -32,5 +31,5 @@ if __name__ == '__main__':
 
     filename = 'lunarlander-dueling_ddqn.png'
 
-    x = [i+1 for i in range(n_games)]
+    x = [i + 1 for i in range(n_games)]
     plotLearning(x, ddqn_scores, eps_history, filename)
